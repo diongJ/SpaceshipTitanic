@@ -1,5 +1,5 @@
 # ============================================================
-# 全局配置：路径、特征列表、超参
+# 基础配置（各阶段共用）：路径、特征列表、超参
 # ============================================================
 import os
 
@@ -18,23 +18,30 @@ SAMPLE_CSV = os.path.join(DATA_DIR, 'sample_submission.csv')
 # 消费字段
 SPEND_COLS = ['RoomService', 'FoodCourt', 'ShoppingMall', 'Spa', 'VRDeck']
 
-# 类别特征（preprocess 后存在）
+# 类别特征（features.py 产出后存在）
 CAT_COLS = ['HomePlanet', 'CryoSleep', 'Destination', 'VIP',
-            'Deck', 'Side', 'AgeGroup', 'DeckSide']
+            'Deck', 'Side', 'AgeGroup', 'DeckSide', 'CabinNumBin',
+            'Route', 'Deck_HomePlanet']
 
-# 特征列表（分阶段定义，训练时可选择启用哪些组）
+# 特征列表（分组定义，训练时可按组拼装）
+# preprocess 产出：base / id(部分) / cabin(部分) / age(部分)
+# features  产出：其余所有组
 FEAT_GROUPS = {
     'base': ['HomePlanet', 'CryoSleep', 'Destination', 'Age', 'VIP',
              'RoomService', 'FoodCourt', 'ShoppingMall', 'Spa', 'VRDeck'],
-    'id': ['GroupSize', 'IsAlone', 'PersonNum'],
-    'cabin': ['Deck', 'CabinNum', 'Side'],
+    'id':   ['GroupSize', 'IsAlone', 'IsLargeGroup', 'PersonNum'],
+    'cabin': ['Deck', 'CabinNum', 'CabinNumBin', 'Side', 'DeckSide'],
     'spend': ['TotalSpend', 'LogTotalSpend', 'HasSpend', 'NumSpendCategories',
+              'MaxSpend', 'SpendStd', 'LuxurySpend', 'EssentialSpend', 'LuxuryRatio',
               'LogRoomService', 'LogFoodCourt', 'LogShoppingMall', 'LogSpa', 'LogVRDeck'],
-    'age': ['AgeGroup', 'IsChild', 'IsSenior'],
-    'group_agg': ['Group_TotalSpend_mean', 'Group_Age_mean', 'Group_Age_min',
+    'age':  ['AgeGroup', 'IsChild', 'IsTeen', 'IsSenior'],
+    'name': ['FamilySize', 'IsSurnameInGroup'],
+    'group_agg': ['Group_TotalSpend_mean', 'Group_TotalSpend_sum',
+                  'Group_Age_mean', 'Group_Age_min', 'Group_Age_max',
                   'Group_CryoRatio', 'Group_VIP_any', 'Group_HomePlanet_nunique'],
-    'interact': ['Cryo_x_TotalSpend', 'DeckSide', 'Route',
-                 'Deck_HomePlanet', 'IsAlone_x_TotalSpend'],
+    'cabin_agg': ['Cabin_Size', 'Cabin_TotalSpend_sum', 'Cabin_CryoRatio'],
+    'interact': ['Cryo_x_TotalSpend', 'Route', 'Deck_HomePlanet',
+                 'Age_x_VIP', 'IsAlone_x_TotalSpend'],
 }
 
 # LightGBM 默认超参起点

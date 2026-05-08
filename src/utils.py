@@ -1,5 +1,5 @@
 # ============================================================
-# 工具函数：固定种子、评估、保存提交
+# 基础工具（各阶段共用）：固定种子、评估、保存提交
 # ============================================================
 import os
 import random
@@ -22,6 +22,7 @@ def accuracy(y_true, y_pred):
 def save_oof(df_oof, exp_name):
     """保存 OOF 预测"""
     path = os.path.join(OUTPUT_DIR, 'oof', f'{exp_name}.csv')
+    os.makedirs(os.path.dirname(path), exist_ok=True)
     df_oof.to_csv(path, index=False)
     print(f'[save] OOF → {path} (shape={df_oof.shape})')
 
@@ -29,6 +30,7 @@ def save_oof(df_oof, exp_name):
 def save_preds(passenger_ids, proba, exp_name):
     """保存测试集预测概率"""
     path = os.path.join(OUTPUT_DIR, 'preds', f'{exp_name}.csv')
+    os.makedirs(os.path.dirname(path), exist_ok=True)
     df = pd.DataFrame({'PassengerId': passenger_ids, 'Transported_Prob': proba})
     df.to_csv(path, index=False)
     print(f'[save] preds → {path} (shape={df.shape})')
@@ -39,6 +41,7 @@ def save_submission(passenger_ids, proba, threshold, exp_name):
     ts = datetime.now().strftime('%Y%m%d_%H%M')
     fname = f'{exp_name}_th{threshold:.3f}_{ts}.csv'
     path = os.path.join(OUTPUT_DIR, 'submissions', fname)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
     df = pd.DataFrame({
         'PassengerId': passenger_ids,
         'Transported': (proba >= threshold)

@@ -1,6 +1,6 @@
 # ============================================================
-# 数据预处理：解析 → 规则填充 → 组内填充 → 统计填充
-# 处理顺序严格遵循 strategy 第四节
+# 阶段 2 — 数据预处理：解析 → 规则填充 → 组内填充 → 统计填充
+# 处理顺序严格遵循 strategy.md 第四节
 # ============================================================
 import numpy as np
 import pandas as pd
@@ -35,6 +35,8 @@ def parse_name(df):
     df['FirstName'] = parts[0]
     df['LastName'] = parts[1].fillna('Unknown')
     df['SurnameGroupSize'] = df.groupby('LastName')['LastName'].transform('count')
+    # 缺失名字的乘客无法判断家族关系，重置为 1
+    df.loc[df['LastName'] == 'Unknown', 'SurnameGroupSize'] = 1
     return df
 
 
@@ -132,14 +134,6 @@ def group_fill(df):
             df.loc[mask & (cryo_ratio < 0.5), 'CryoSleep'] = False
             print(f'  [group_fill] CryoSleep by group majority: {n}')
 
-    # Age：同组内用中位数填充（家人年龄有相关但不是完全相同）
-    if 'AgeGroup' not in df.columns:
-        df['AgeGroup'] = pd.cut(
-            df['Age'],
-            bins=[-1, 12, 17, 25, 40, 60, 200],
-            labels=['<13', '13-17', '18-25', '26-40', '41-60', '60+']
-        )
-
     return df
 
 
@@ -200,7 +194,12 @@ def add_base_features(df):
     df['HasSpend'] = (df['TotalSpend'] > 0).astype(int)
     df['NumSpendCategories'] = (df[SPEND_COLS] > 0).sum(axis=1).astype(int)
 
-    # 年龄标记
+    # 年龄标记（在 Age 填充完成后计算，确保 AgeGroup 无 NaN）
+    df['AgeGroup'] = pd.cut(
+        df['Age'],
+        bins=[-1, 12, 17, 25, 40, 60, 200],
+        labels=['<13', '13-17', '18-25', '26-40', '41-60', '60+']
+    )
     df['IsChild'] = (df['Age'] < 13).astype(int)
     df['IsSenior'] = (df['Age'] >= 60).astype(int)
 

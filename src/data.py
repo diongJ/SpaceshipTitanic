@@ -1,8 +1,8 @@
 # ============================================================
-# 数据加载
+# 基础工具（各阶段共用）：数据加载
 # ============================================================
 import pandas as pd
-from config import TRAIN_CSV, TEST_CSV
+from config import TRAIN_CSV, TEST_CSV, SAMPLE_CSV
 
 
 def load_raw():
@@ -14,4 +14,4 @@ def load_raw():
 
 
 def load_sample_submission():
-    return pd.read_csv(TEST_CSV.replace('test.csv', 'sample_submission.csv'))
+    return pd.read_csv(SAMPLE_CSV)
