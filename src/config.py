@@ -43,9 +43,11 @@ FEAT_GROUPS = {
     'interact': ['Cryo_x_TotalSpend', 'Route', 'Deck_HomePlanet',
                  'Age_x_VIP', 'IsAlone_x_TotalSpend'],
     'target_enc': ['Group_TargetMean', 'LastName_TE', 'DeckSide_TE'],
+    'group_label': ['Group_TrainTransportedCount', 'Group_TrainNotTransportedCount',
+                    'Group_TrainTransportRatio'],
 }
 
-# LightGBM 默认超参起点
+# LightGBM 超参
 LGB_PARAMS = {
     'objective': 'binary',
     'metric': 'binary_error',
@@ -76,7 +78,7 @@ XGB_PARAMS = {
     'random_state': SEED,
 }
 
-# CatBoost 默认超参起点
+# CatBoost 超参
 CAT_PARAMS = {
     'loss_function': 'Logloss',
     'eval_metric': 'Accuracy',
@@ -88,4 +90,21 @@ CAT_PARAMS = {
     'bagging_temperature': 1,
     'verbose': 0,
     'random_seed': SEED,
+}
+
+# Extra Trees 默认超参
+ET_PARAMS = {
+    'n_estimators': 500,
+    'min_samples_leaf': 2,
+    'random_state': SEED,
+    'n_jobs': -1,
+}
+
+# HistGradientBoosting 默认超参
+HGB_PARAMS = {
+    'max_depth': 7,
+    'learning_rate': 0.035,
+    'max_iter': 400,
+    'min_samples_leaf': 10,
+    'random_state': SEED,
 }

@@ -19,6 +19,8 @@ DEFAULT_EXPS = {
     'lgb': 'lgb_stratified_5fold_2seed',
     'xgb': 'xgb_stratified_5fold_2seed',
     'cat': 'cat_stratified_5fold_2seed',
+    'et':  'et_stratified_5fold_2seed',
+    'hgb': 'hgb_stratified_5fold_2seed',
 }
 
 
