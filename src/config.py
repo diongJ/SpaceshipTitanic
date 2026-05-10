@@ -42,6 +42,7 @@ FEAT_GROUPS = {
     'cabin_agg': ['Cabin_Size', 'Cabin_TotalSpend_sum', 'Cabin_CryoRatio'],
     'interact': ['Cryo_x_TotalSpend', 'Route', 'Deck_HomePlanet',
                  'Age_x_VIP', 'IsAlone_x_TotalSpend'],
+    'target_enc': ['Group_TargetMean', 'LastName_TE', 'DeckSide_TE'],
 }
 
 # LightGBM 默认超参起点

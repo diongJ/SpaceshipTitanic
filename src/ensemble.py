@@ -106,17 +106,96 @@ def search_weights(oof_mat, y_arr, model_names):
     return best_w, best_score
 
 
+# ── 目标编码（meta-learner 用）──────────────────────────────
+
+def _te_encode(tr_col, y_arr, te_col, smooth_k=1):
+    """
+    LOO target encoding，用于元模型的额外特征。
+    tr_col : training 样本的分组 key (array)
+    y_arr  : training 标签 (float array)
+    te_col : test 样本的分组 key (array)
+    返回 (train_te, test_te) numpy arrays.
+    """
+    global_mean = float(y_arr.mean())
+
+    df = pd.DataFrame({'g': tr_col, 'y': y_arr.astype(float)})
+    agg = df.groupby('g')['y'].agg(['sum', 'count'])
+
+    g_sum = agg['sum'].reindex(tr_col).values.astype(float)
+    g_cnt = agg['count'].reindex(tr_col).values.astype(float)
+    loo_sum = g_sum - y_arr
+    loo_cnt = g_cnt - 1
+    train_te = np.where(
+        loo_cnt > 0,
+        (loo_sum + smooth_k * global_mean) / (loo_cnt + smooth_k),
+        global_mean
+    )
+
+    g_sum_te = agg['sum'].reindex(te_col).fillna(0).values.astype(float)
+    g_cnt_te = agg['count'].reindex(te_col).fillna(0).values.astype(float)
+    test_te = np.where(
+        g_cnt_te > 0,
+        (g_sum_te + smooth_k * global_mean) / (g_cnt_te + smooth_k),
+        global_mean
+    )
+    return train_te, test_te
+
+
+def compute_te_features(train_pids, test_pids, y_arr):
+    """
+    为元模型计算两个目标编码特征（使用全训练集 LOO，smooth_k=1）：
+      - Group_TargetMean : 按 GroupId
+      - LastName_TE      : 按 LastName
+    返回 (oof_te, pred_te) shape (N_train, 2) / (N_test, 2)
+    """
+    from config import TRAIN_CSV, TEST_CSV
+
+    def _parse(csv_path):
+        df = pd.read_csv(csv_path)[['PassengerId', 'Name']]
+        parts = df['PassengerId'].str.split('_', expand=True)
+        df['GroupId'] = parts[0].astype(int)
+        name_parts = df['Name'].str.strip().str.rsplit(' ', n=1, expand=True)
+        df['LastName'] = name_parts[1].fillna('Unknown')
+        df.loc[df['Name'].isna(), 'LastName'] = 'Unknown'
+        return df.set_index('PassengerId')
+
+    tr_meta = _parse(TRAIN_CSV)
+    te_meta = _parse(TEST_CSV)
+
+    tr_gid = tr_meta.loc[train_pids, 'GroupId'].values
+    te_gid = te_meta.loc[test_pids,  'GroupId'].values
+
+    tr_ln = tr_meta.loc[train_pids, 'LastName'].astype(str).values.copy()
+    te_ln = te_meta.loc[test_pids,  'LastName'].astype(str).values.copy()
+    tr_ln[tr_ln == 'Unknown'] = '__unk__'
+    te_ln[te_ln == 'Unknown'] = '__unk__'
+
+    gid_tr, gid_te = _te_encode(tr_gid, y_arr, te_gid)
+    ln_tr,  ln_te  = _te_encode(tr_ln,  y_arr, te_ln)
+
+    oof_te  = np.column_stack([gid_tr, ln_tr])
+    pred_te = np.column_stack([gid_te, ln_te])
+
+    print(f'  [TE] Group_TargetMean range: [{gid_tr.min():.4f}, {gid_tr.max():.4f}]')
+    print(f'  [TE] LastName_TE      range: [{ln_tr.min():.4f},  {ln_tr.max():.4f}]')
+    return oof_te, pred_te
+
+
 # ── LR Stacking ─────────────────────────────────────────────
 
-def lr_stacking(oof_mat, pred_mat, y_arr, model_names):
+def lr_stacking(oof_mat, pred_mat, y_arr, model_names,
+                extra_tr=None, extra_te=None):
     """
-    以 OOF 概率矩阵为特征训练 LogisticRegression 元模型。
-    OOF 预测已经是 out-of-fold，可直接作为训练数据而不会泄漏。
+    以 OOF 概率矩阵（+ 可选额外特征）训练 LogisticRegression 元模型。
+    extra_tr / extra_te : 目标编码等额外特征，shape (N, k)。
     返回: (stack_oof_proba, stack_pred_proba, stack_oof_acc)
     """
+    full_tr = np.column_stack([oof_mat, extra_tr]) if extra_tr is not None else oof_mat
+    full_te = np.column_stack([pred_mat, extra_te]) if extra_te is not None else pred_mat
+
     scaler = StandardScaler()
-    X_tr = scaler.fit_transform(oof_mat)
-    X_te = scaler.transform(pred_mat)
+    X_tr = scaler.fit_transform(full_tr)
+    X_te = scaler.transform(full_te)
 
     lr = LogisticRegression(C=1.0, random_state=SEED, max_iter=1000)
     lr.fit(X_tr, y_arr)
@@ -125,8 +204,10 @@ def lr_stacking(oof_mat, pred_mat, y_arr, model_names):
     stack_pred = lr.predict_proba(X_te)[:, 1]
     stack_acc  = accuracy(y_arr, stack_oof >= 0.5)
 
+    te_names = ['Group_TE', 'LastName_TE'] if extra_tr is not None else []
+    all_names = model_names + te_names
     print('\n[LR Stack] 系数:')
-    for name, coef in zip(model_names, lr.coef_[0]):
+    for name, coef in zip(all_names, lr.coef_[0]):
         print(f'  {name}: {coef:.4f}')
     print(f'  OOF acc (th=0.50): {stack_acc:.5f}')
     return stack_oof, stack_pred, stack_acc
@@ -191,11 +272,16 @@ def run_ensemble(exps=None, save=True):
     blend_pred = pred_mat @ best_w
     blend_th, blend_acc_opt = optimize_threshold(blend_oof, y_arr)
 
-    # ── 3. LR Stacking ──────────────────────────────────────
+    # ── 3. LR Stacking（含目标编码特征）───────────────────────
     print('\n' + '─' * 50)
-    print('[Step 3] LR Stacking')
+    print('[Step 3] LR Stacking + TE features')
     print('─' * 50)
-    stack_oof, stack_pred, stack_acc_05 = lr_stacking(oof_mat, pred_mat, y_arr, model_names)
+    train_pids = list(y.index)
+    print('  计算目标编码特征...')
+    oof_te, pred_te = compute_te_features(train_pids, test_ids, y_arr)
+    stack_oof, stack_pred, stack_acc_05 = lr_stacking(
+        oof_mat, pred_mat, y_arr, model_names,
+        extra_tr=oof_te, extra_te=pred_te)
     stack_th, stack_acc_opt = optimize_threshold(stack_oof, y_arr)
 
     # ── 汇总对比 ─────────────────────────────────────────────

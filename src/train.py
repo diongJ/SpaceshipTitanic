@@ -34,8 +34,10 @@ def prepare_data(feature_groups=None):
     train_f, test_f = build_features(train_c, test_c)
 
     feature_cols = get_feature_names(feature_groups)
-    # 只保留实际存在的列（防御性编程）
-    feature_cols = [c for c in feature_cols if c in train_f.columns]
+    # 排除目标编码列（由 ensemble.py meta-learner 使用，不在 base model 中）
+    te_cols = set(FEAT_GROUPS.get('target_enc', []))
+    # 只保留实际存在的列
+    feature_cols = [c for c in feature_cols if c in train_f.columns and c not in te_cols]
     print(f'  feature count: {len(feature_cols)}')
 
     # PassengerId 用于保存 OOF / 提交
@@ -137,7 +139,7 @@ def run_cv(models=None, seeds=None, n_splits=5, cv_scheme='stratified', feature_
         oof_acc = accuracy(y, oof_preds >= 0.5)
         cv_mean = np.mean([s['acc'] for s in fold_scores])
         cv_std = np.std([s['acc'] for s in fold_scores])
-        print(f'  → OOF acc={oof_acc:.5f}  CV mean={cv_mean:.5f}±{cv_std:.5f}')
+        print(f'  -> OOF acc={oof_acc:.5f}  CV mean={cv_mean:.5f}+-{cv_std:.5f}')
 
         # 保存
         exp_name = f'{model_type}_{cv_scheme}_{n_splits}fold_{len(seeds)}seed'
@@ -182,7 +184,6 @@ def _train_one_fold(model_type, X_tr, y_tr, X_val, y_val, X_test, params, cat_co
         return train_cat_fold(X_tr, y_tr, X_val, y_val, X_test, params, cat_cols, seed)
     else:
         raise ValueError(f'Unknown model_type: {model_type}')
-
 
 
 # ── CLI 入口 ────────────────────────────────────────────────
