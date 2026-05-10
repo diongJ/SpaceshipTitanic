@@ -205,6 +205,40 @@ def compute_fold_te(te_src_tr, y_tr, te_src_val, te_src_test, smooth_k=10):
     return pd.DataFrame(tr_dict), pd.DataFrame(val_dict), pd.DataFrame(test_dict)
 
 
+# ── 10. TFIDF 姓名特征 ─────────────────────────────────────
+
+def add_tfidf_name_features(df, n_tfidf=1000, n_svd=5):
+    """对 LastName 做 TFIDF 字符级向量化 → TruncatedSVD 降维，生成姓名文本特征。"""
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.decomposition import TruncatedSVD
+
+    names = df['LastName'].astype(str).values
+    names[names == 'Unknown'] = '__unk__'
+
+    vec = TfidfVectorizer(max_features=n_tfidf, analyzer='char_wb', ngram_range=(3, 5))
+    tfidf_mat = vec.fit_transform(names)
+
+    svd = TruncatedSVD(n_components=n_svd, random_state=42)
+    tfidf_pca = svd.fit_transform(tfidf_mat)
+
+    for i in range(n_svd):
+        df[f'Name_TFIDF_{i+1}'] = tfidf_pca[:, i]
+    return df
+
+
+# ── 11. 组规模分箱 + 独行儿童 ───────────────────────────────
+
+def add_group_bin_features(df):
+    df = df.copy()
+    df['GroupSizeBin'] = pd.cut(
+        df['GroupSize'],
+        bins=[0, 1, 2, 4, 200],
+        labels=['solo', 'pair', 'medium', 'large']
+    )
+    df['IsLoneChild'] = ((df['GroupSize'] == 1) & (df['Age'] < 13)).astype(int)
+    return df
+
+
 # ── 主入口 ────────────────────────────────────────────────
 
 def build_features(train_df, test_df):
